@@ -1,4 +1,5 @@
 import os
+import threading
 import customtkinter as ctk
 from tkinter import filedialog
 from ffmpeg import FFmpeg
@@ -51,6 +52,11 @@ class App(ctk.CTk):
 
 		operation_menu = ctk.CTkOptionMenu(self, variable=self.operation_var, values=operation_options, command=self.update_extension)
 		operation_menu.grid(row=2, column=1, columnspan=2, padx=10, pady=10)
+
+		# Progress bar
+		self.progress_bar = ctk.CTkProgressBar(self)
+		self.progress_bar.grid(row=3, column=0, columnspan=3, padx=10, pady=10)
+		self.progress_bar.set(0)
 		
 		# Convert button
 		start_button = ctk.CTkButton(self, text="Start Conversion", command=self.start_conversion)
@@ -74,6 +80,7 @@ class App(ctk.CTk):
 		else:
 			self.output_extension_label.configure(text=".mp4")
 
+
 	def start_conversion(self):
 		input_file_path = self.input_file.get()
 		output_file_name = self.output_file.get() or os.path.splitext(os.path.basename(input_file_path))[0]
@@ -86,4 +93,19 @@ class App(ctk.CTk):
 	
 		output_extension = ".mp3" if operation == 'audio_only' else ".mp4"
 		output_file_path = os.path.join(self.output_dir.get(), f"{output_file_name}{output_extension}")
-		self.FFmpeg.run_ffmpeg(input_file_path, output_file_path, operation)
+
+		self.progress_bar.set(0)
+
+		# Run conversion in a separate thread
+		threading.Thread(target=self.run_conversion, args=(input_file_path, output_file_path, operation)).start()
+
+	def run_conversion(self, input_file, output_file, operation):
+		self.FFmpeg.run_ffmpeg(input_file, output_file, operation, self.on_conversion_complete)
+
+	def on_conversion_complete(self, result):
+		self.progress_bar.set(1)
+
+		if result.returncode != 0:
+			CTkMessagebox(title="Error", message=result.stderr)
+		else:
+			CTkMessagebox(title="Success", message="Completed!")
